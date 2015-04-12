@@ -39,7 +39,7 @@ WHITE = (255, 255, 255)
 
 class MyClientProtocol(WebSocketClientProtocol):
     def onOpen(self):
-        print('WebSocket connection open.')
+        log.msg('WebSocket connection open.')
         # The WebSocket connection is open. we store ourselves on the
         # factory object, so that we can access this protocol instance
         # from pygame, e.g. to use sendMessage() for sending WS msgs.
@@ -53,10 +53,10 @@ class MyClientProtocol(WebSocketClientProtocol):
         else:
             msg = 'Text message received: {0}'.format(payload.decode('utf8'))
         self.factory._app.msgs.append([msg])
-        print msg
+        log.msg(msg)
 
     def onClose(self, wasClean, code, reason):
-        print('WebSocket connection closed: {0}'.format(reason))
+        log.msg('WebSocket connection closed: {0}'.format(reason))
         # The WebSocket connection is gone. clear the reference to ourselves
         # on the factory object. when accessing this protocol instance from
         # pygame, always check if the ref is None. only use it when it's
@@ -75,10 +75,12 @@ class MyClientFactory(WebSocketClientFactory):
 
 class App(object):
     def __init__(self):
+        self._run = True
         self._timestamp = datetime.datetime.now()
         self.msgs = []
         self.init_display()
         self.init_font()
+        self.open_websocket()
 
     def init_display(self):
         pygame.display.init()
@@ -90,26 +92,40 @@ class App(object):
         pygame.font.init()
         self.font = pygame.font.SysFont(None, 48)
 
+    def open_websocket(self):
+        self._factory = MyClientFactory('ws://localhost:9000', self)
+        reactor.connectTCP('127.0.0.1', 9000, self._factory)
+
+    @property
+    def websocket(self):
+        if self._factory:
+            return self._factory._protocol
+
+    def close_websocket(self):
+        if self.websocket:
+            self.websocket.sendClose()
+            self._run = False
+
     def main(self):
-        while True:
+        while self._run or self.websocket:
             self.process_events()
             self.send_msgs()
-            self.display_total_msgs()
             # Do pygame stuff.
+            self.display_total_msgs()
             yield
+        # Stop the Twisted reactor.
+        reactor.stop()
 
     def send_msgs(self):
-        if self._factory:
-            ws = self._factory._protocol
-            if ws:
-                # Rather than sleep the main loop for 1 second, as the original
-                # echo client does, let's check 1 second has elapsed.
-                timestamp = datetime.datetime.now()
-                timedelta = timestamp - self._timestamp
-                if timedelta.total_seconds() >= 1:
-                    ws.sendMessage(u'Hello, world!'.encode('utf8'))
-                    ws.sendMessage(b'\x00\x01\x03\x04', isBinary=True)
-                    self._timestamp = timestamp
+        if self.websocket:
+            # Rather than sleep the main loop for 1 second, as the original
+            # echo client does, let's check 1 second has elapsed.
+            timestamp = datetime.datetime.now()
+            timedelta = timestamp - self._timestamp
+            if timedelta.total_seconds() >= 1:
+                self.websocket.sendMessage(u'Hello, world!'.encode('utf8'))
+                self.websocket.sendMessage(b'\x00\x01\x03\x04', isBinary=True)
+                self._timestamp = timestamp
 
     def display_total_msgs(self):
         total_msgs = len(self.msgs)
@@ -125,7 +141,7 @@ class App(object):
     def process_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                reactor.stop()  # Stop the Twisted reactor.
+                self.close_websocket()
 
 
 if __name__ == '__main__':
@@ -134,6 +150,4 @@ if __name__ == '__main__':
     # twisted.internet.task.LoopingCall is also possible
     coop = Cooperator()
     coop.coiterate(app.main())
-    app._factory = MyClientFactory('ws://localhost:9000', app)
-    reactor.connectTCP('127.0.0.1', 9000, app._factory)
     reactor.run()  # Start the Twisted reactor.
