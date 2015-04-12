@@ -26,7 +26,6 @@
 import sys
 import datetime
 import pygame
-from copy import copy
 from twisted.internet import reactor
 from twisted.python import log
 from twisted.internet.task import Cooperator
