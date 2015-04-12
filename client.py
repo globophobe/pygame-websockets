@@ -52,7 +52,7 @@ class MyClientProtocol(WebSocketClientProtocol):
             msg = 'Binary message received: {0} bytes'.format(len(payload))
         else:
             msg = 'Text message received: {0}'.format(payload.decode('utf8'))
-        self.factory._app.msgs.append([msg])
+        self.factory._app.msgs.append(msg)
         log.msg(msg)
 
     def onClose(self, wasClean, code, reason):
