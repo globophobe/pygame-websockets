@@ -33,29 +33,34 @@ from autobahn.twisted.websocket import (
     WebSocketClientProtocol, WebSocketClientFactory
 )
 
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+
 
 class MyClientProtocol(WebSocketClientProtocol):
     def onOpen(self):
         print('WebSocket connection open.')
-        # the WebSocket connection is open. we store ourselves on the
+        # The WebSocket connection is open. we store ourselves on the
         # factory object, so that we can access this protocol instance
-        # from pygame, e.g. to use sendMessage() for sending WS msgs
+        # from pygame, e.g. to use sendMessage() for sending WS msgs.
         self.factory._protocol = self
 
     def onMessage(self, payload, isBinary):
-        # a WebSocket message was received. now interpret it, possibly
+        # A WebSocket message was received. Now interpret it, possibly
         # accessing the pygame app `self.factory._app`
         if isBinary:
-            print('Binary message received: {0} bytes'.format(len(payload)))
+            msg = 'Binary message received: {0} bytes'.format(len(payload))
         else:
-            print('Text message received: {0}'.format(payload.decode('utf8')))
+            msg = 'Text message received: {0}'.format(payload.decode('utf8'))
+        self.factory._app.msgs.append([msg])
+        print msg
 
     def onClose(self, wasClean, code, reason):
         print('WebSocket connection closed: {0}'.format(reason))
-        # the WebSocket connection is gone. clear the reference to ourselves
+        # The WebSocket connection is gone. clear the reference to ourselves
         # on the factory object. when accessing this protocol instance from
         # pygame, always check if the ref is None. only use it when it's
-        # not None (which means, we are actually connected)
+        # not None (which means, we are actually connected).
         self.factory._protocol = None
 
 
@@ -70,9 +75,10 @@ class MyClientFactory(WebSocketClientFactory):
 
 class App(object):
     def __init__(self):
-        self._run = True
         self._timestamp = datetime.datetime.now()
+        self.msgs = []
         self.init_display()
+        self.init_font()
 
     def init_display(self):
         pygame.display.init()
@@ -80,14 +86,19 @@ class App(object):
             (600, 480), pygame.RESIZABLE
         )
 
+    def init_font(self):
+        pygame.font.init()
+        self.font = pygame.font.SysFont(None, 48)
+
     def main(self):
-        while self._run:
+        while True:
             self.process_events()
-            self.send_messages()
+            self.send_msgs()
+            self.display_total_msgs()
             # Do pygame stuff.
             yield
 
-    def send_messages(self):
+    def send_msgs(self):
         if self._factory:
             ws = self._factory._protocol
             if ws:
@@ -100,11 +111,20 @@ class App(object):
                     ws.sendMessage(b'\x00\x01\x03\x04', isBinary=True)
                     self._timestamp = timestamp
 
+    def display_total_msgs(self):
+        total_msgs = len(self.msgs)
+        msg = 'WebSocket messages received: {}'.format(unicode(total_msgs))
+        msg = self.font.render(msg, True, BLACK)
+        w, h = self._display_surface.get_size()
+        w = w - msg.get_width()
+        h = h - msg.get_height()
+        self._display_surface.fill(WHITE)
+        self._display_surface.blit(msg, (int(w / 2.0), int(h / 2)))
+        pygame.display.flip()
+
     def process_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                self.run = False
-                pygame.display.quit()
                 reactor.stop()  # Stop the Twisted reactor.
 
 

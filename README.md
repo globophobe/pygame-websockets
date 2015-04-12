@@ -36,19 +36,18 @@ Usually, the Pygame event loop is just a **while** loop:
 
 To integrate with Twisted, we add a *yield* statement to the **while** loop, and coiterate with twisted.internet.task.Cooperator:
 
-    import pygame
-    from twisted.internet import reactor
-    from twisted.internet.task import Cooperator
+import pygame
+from twisted.internet import reactor
+from twisted.internet.task import Cooperator
 
 
     class App(object):
         def __init__(self):
-            self._run = True
             pygame.display.init()
             pygame.display.set_mode((600, 480), pygame.RESIZABLE)
 
         def main(self):
-            while self._run:
+            while True:
                 self.process_events()
                 # Do pygame stuff.
                 yield  # For the Twisted reactor
@@ -56,7 +55,6 @@ To integrate with Twisted, we add a *yield* statement to the **while** loop, and
         def process_events(self):
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    self._run = False
                     reactor.stop()  # Stop the Twisted reactor.
 
     if __name__ == '__main__':
