@@ -24,20 +24,15 @@
 #
 ###############################################################################
 import sys
+import datetime
 import pygame
+from copy import copy
 from twisted.internet import reactor
 from twisted.python import log
 from twisted.internet.task import Cooperator
-from twisted.internet.defer import Deferred
 from autobahn.twisted.websocket import (
     WebSocketClientProtocol, WebSocketClientFactory
 )
-
-
-def sleep(delay):
-    d = Deferred()
-    reactor.callLater(delay, d.callback, None)
-    return d
 
 
 class MyClientProtocol(WebSocketClientProtocol):
@@ -77,6 +72,7 @@ class MyClientFactory(WebSocketClientFactory):
 class App(object):
     def __init__(self):
         self._run = True
+        self._timestamp = datetime.datetime.now()
         self.init_display()
 
     def init_display(self):
@@ -90,14 +86,20 @@ class App(object):
             self.process_events()
             self.send_messages()
             # Do pygame stuff.
-            yield sleep(1)
+            yield
 
     def send_messages(self):
         if self._factory:
             ws = self._factory._protocol
             if ws:
-                ws.sendMessage(u'Hello, world!'.encode('utf8'))
-                ws.sendMessage(b'\x00\x01\x03\x04', isBinary=True)
+                # Rather than sleep the main loop for 1 second, as the original
+                # echo client does, let's check 1 second has elapsed.
+                timestamp = datetime.datetime.now()
+                timedelta = timestamp - self._timestamp
+                if timedelta.total_seconds() >= 1:
+                    ws.sendMessage(u'Hello, world!'.encode('utf8'))
+                    ws.sendMessage(b'\x00\x01\x03\x04', isBinary=True)
+                    self._timestamp = timestamp
 
     def process_events(self):
         for event in pygame.event.get():
