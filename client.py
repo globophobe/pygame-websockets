@@ -62,6 +62,7 @@ class MyClientProtocol(WebSocketClientProtocol):
         # pygame, always check if the ref is None. only use it when it's
         # not None (which means, we are actually connected).
         self.factory._protocol = None
+        self.factory._app._run = False
 
 
 class MyClientFactory(WebSocketClientFactory):
@@ -103,8 +104,7 @@ class App(object):
 
     def close_websocket(self):
         if self.websocket:
-            self.websocket.sendClose()
-            self._run = False
+            self.websocket.sendClose(1000)
 
     def main(self):
         while self._run or self.websocket:
